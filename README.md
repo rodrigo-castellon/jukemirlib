@@ -1,42 +1,21 @@
-# addict
+# jukemirlib
 ![Tests](https://github.com/mewwts/addict/workflows/Python%20test/badge.svg) [![Coverage Status](https://img.shields.io/coveralls/mewwts/addict.svg)](https://coveralls.io/r/mewwts/addict) [![PyPI version](https://badge.fury.io/py/addict.svg)](https://badge.fury.io/py/addict) [![Anaconda-Server Badge](https://anaconda.org/conda-forge/addict/badges/version.svg)](https://anaconda.org/conda-forge/addict)
 
-addict is a Python module that gives you dictionaries whose values are both gettable and settable using attributes, in addition to standard item-syntax.
+jukemirlib is a Python module that allows you to extract representations from Jukebox in a couple of lines of code.
 
-This means that you **don't have to** write dictionaries like this anymore:
 ```Python
-body = {
-    'query': {
-        'filtered': {
-            'query': {
-                'match': {'description': 'addictive'}
-            },
-            'filter': {
-                'term': {'created_by': 'Mats'}
-            }
-        }
-    }
-}
-```
-Instead, you can simply write the following three lines:
-```Python
-body = Dict()
-body.query.filtered.query.match.description = 'addictive'
-body.query.filtered.filter.term.created_by = 'Mats'
+import jukemirlib
+
+audio = jukemirlib.load_audio(fpath)
+
+reps = jukemirlib.extract(layers=[36])
 ```
 
 ### Installing
 You can install via `pip`
 ```sh
-pip install addict
+pip install jukemirlib
 ```
-
-or through `conda`
-```sh
-conda install addict -c conda-forge
-```
-
-Addict runs on Python 2 and Python 3, and every build is tested towards 2.7, 3.6 and 3.7. 
 
 ### Usage
 addict inherits from ```dict```, but is more flexible in terms of accessing and setting its values.
