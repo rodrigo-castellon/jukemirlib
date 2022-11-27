@@ -14,6 +14,10 @@ from accelerate import init_empty_weights
 import torch.nn as nn
 import torch
 
+from .constants import CACHE_DIR, DEVICE
+
+__all__ = ['setup_models']
+
 # this is a huggingface accelerate method, all we do is just
 # remove the type hints that we don't want to import in the header
 def set_module_tensor_to_device(
@@ -76,13 +80,13 @@ def get_checkpoint(local_path):
 
         wget.download(remote_path, local_path, bar=bar_progress)
 
-def setup_models(cache_dir="/juice/scr/rjcaste/jukemirlib-testing/model_cache",
-                 verbose=True,
-                 device="cuda"):
+def setup_models(verbose=True):
+    global VQVAE, TOP_PRIOR
+
     # caching preliminaries
-    VQVAE_CACHE_PATH = cache_dir + '/vqvae.pth.tar'
-    PRIOR_CACHE_PATH = cache_dir + '/prior_level_2.pth.tar'
-    os.makedirs(cache_dir, exist_ok=True)
+    VQVAE_CACHE_PATH = CACHE_DIR + '/vqvae.pth.tar'
+    PRIOR_CACHE_PATH = CACHE_DIR + '/prior_level_2.pth.tar'
+    os.makedirs(CACHE_DIR, exist_ok=True)
 
     # get the checkpoints downloaded if they haven't been already
     get_checkpoint(VQVAE_CACHE_PATH)
@@ -90,9 +94,6 @@ def setup_models(cache_dir="/juice/scr/rjcaste/jukemirlib-testing/model_cache",
 
     if verbose:
         print("Importing jukebox and associated packages...")
-
-    # Set up MPI
-    #rank, local_rank, device = setup_dist_from_mpi()
 
     # Set up VQVAE
     if verbose:
@@ -106,16 +107,16 @@ def setup_models(cache_dir="/juice/scr/rjcaste/jukemirlib-testing/model_cache",
     max_batch_size = 3 if model == "5b_lyrics" else 16
     hps.levels = 3
     hps.hop_fraction = [0.5, 0.5, 0.125]
-    vqvae, *priors = MODELS[model]
+    VQVAE, *priors = MODELS[model]
 
-    hparams = setup_hparams(vqvae, dict(sample_length=1048576))
+    hparams = setup_hparams(VQVAE, dict(sample_length=1048576))
 
     # hparams.restore_vqvae = VQVAE_CACHE_PATH
 
     # don't actually load any weights in yet,
     # leave it for later. memory optimization
     with init_empty_weights():
-        vqvae = make_vqvae(
+        VQVAE = make_vqvae(
             hparams, 'meta'
         )
 
@@ -132,12 +133,12 @@ def setup_models(cache_dir="/juice/scr/rjcaste/jukemirlib-testing/model_cache",
     # don't actually load any weights in yet,
     # leave it for later. memory optimization
     with init_empty_weights():
-        top_prior = make_prior(hparams, vqvae, 'meta')
+        TOP_PRIOR = make_prior(hparams, VQVAE, 'meta')
 
     # flips a bit that tells the model to return activations
     # instead of projecting to tokens and getting loss for
     # forward pass
-    top_prior.prior.only_encode = True
+    TOP_PRIOR.prior.only_encode = True
 
     ##############################################
     # actually loading in the model weights now! #
@@ -153,7 +154,7 @@ def setup_models(cache_dir="/juice/scr/rjcaste/jukemirlib-testing/model_cache",
     if verbose:
         print("Loading the top prior weights into our empty model...")
     for k in tqdm(top_prior_weights['model'].keys()):
-        set_module_tensor_to_device(top_prior, k, device, value=top_prior_weights['model'][k])
+        set_module_tensor_to_device(TOP_PRIOR, k, DEVICE, value=top_prior_weights['model'][k])
 
     del top_prior_weights
 
@@ -167,6 +168,6 @@ def setup_models(cache_dir="/juice/scr/rjcaste/jukemirlib-testing/model_cache",
     if verbose:
         print("Loading the VQ-VAE weights into our empty model...")
     for k in tqdm(vqvae_weights['model'].keys()):
-        set_module_tensor_to_device(vqvae, k, device, value=vqvae_weights['model'][k])
+        set_module_tensor_to_device(VQVAE, k, DEVICE, value=vqvae_weights['model'][k])
 
-    return vqvae, top_prior
+    return VQVAE, TOP_PRIOR

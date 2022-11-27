@@ -6,6 +6,10 @@ import torch as t
 import gc
 import numpy as np
 
+from .constants import DEVICE
+from . import VQVAE, TOP_PRIOR
+from .setup_models import *
+
 __all__ = ["load_audio", "extract"]
 
 JUKEBOX_SAMPLE_RATE = 44100
@@ -51,7 +55,9 @@ def get_z(vqvae, audio):
     # don't compute unnecessary discrete encodings
     audio = audio[: JUKEBOX_SAMPLE_RATE * 25]
 
-    zs = vqvae.encode(torch.cuda.FloatTensor(audio[np.newaxis, :, np.newaxis]))
+    audio = torch.from_numpy(audio[np.newaxis, :, np.newaxis]).to(device=DEVICE)
+
+    zs = vqvae.encode(audio)
 
     z = zs[-1].flatten()[np.newaxis, :]
 
@@ -114,36 +120,10 @@ def downsample(representation,
 
     return resampled_reps
 
-def get_final_activations(z, x_cond, y_cond, top_prior):
-
-    x = z[:, :T]
-
-    input_length = x.shape[1]
-
-    if x.shape[1] < T:
-        # arbitrary choices
-        min_token = 0
-        max_token = 100
-
-        x = torch.cat((x,
-                       torch.randint(min_token, max_token, size=(1, T - input_length,), device='cuda')),
-                      dim=-1)
-
-    # encoder_kv and fp16 are set to the defaults, but explicitly so
-    out = top_prior.prior.forward(
-        x, x_cond=x_cond, y_cond=y_cond, encoder_kv=None, fp16=False
-    )
-
-    # chop off, in case input was already chopped
-    out = out[:,:input_length]
-
-    return out
-
 def roll(x, n):
     return t.cat((x[:, -n:], x[:, :-n]), dim=1)
 
-def get_activations_custom(top_prior,
-                           x,
+def get_activations_custom(x,
                            x_cond,
                            y_cond,
                            layers_to_extract=None,
@@ -166,40 +146,40 @@ def get_activations_custom(top_prior,
 
     # Preprocess.
     with t.no_grad():
-        x = top_prior.prior.preprocess(x)
+        x = TOP_PRIOR.prior.preprocess(x)
 
     N, D = x.shape
     assert isinstance(x, t.cuda.LongTensor)
-    assert (0 <= x).all() and (x < top_prior.prior.bins).all()
+    assert (0 <= x).all() and (x < TOP_PRIOR.prior.bins).all()
 
-    if top_prior.prior.y_cond:
+    if TOP_PRIOR.prior.y_cond:
         assert y_cond is not None
-        assert y_cond.shape == (N, 1, top_prior.prior.width)
+        assert y_cond.shape == (N, 1, TOP_PRIOR.prior.width)
     else:
         assert y_cond is None
 
-    if top_prior.prior.x_cond:
+    if TOP_PRIOR.prior.x_cond:
         assert x_cond is not None
-        assert x_cond.shape == (N, D, top_prior.prior.width) or x_cond.shape == (N, 1, top_prior.prior.width), f"{x_cond.shape} != {(N, D, top_prior.prior.width)} nor {(N, 1, top_prior.prior.width)}. Did you pass the correct --sample_length?"
+        assert x_cond.shape == (N, D, TOP_PRIOR.prior.width) or x_cond.shape == (N, 1, TOP_PRIOR.prior.width), f"{x_cond.shape} != {(N, D, TOP_PRIOR.prior.width)} nor {(N, 1, TOP_PRIOR.prior.width)}. Did you pass the correct --sample_length?"
     else:
         assert x_cond is None
-        x_cond = t.zeros((N, 1, top_prior.prior.width), device=x.device, dtype=t.float)
+        x_cond = t.zeros((N, 1, TOP_PRIOR.prior.width), device=x.device, dtype=t.float)
 
     x_t = x # Target
     # self.x_emb is just a straightforward embedding, no trickery here
-    x = top_prior.prior.x_emb(x) # X emb
+    x = TOP_PRIOR.prior.x_emb(x) # X emb
     # this is to be able to fit in a start token/conditioning info: just shift to the right by 1
     x = roll(x, 1) # Shift by 1, and fill in start token
     # self.y_cond == True always, so we just use y_cond here
-    if top_prior.prior.y_cond:
-        x[:,0] = y_cond.view(N, top_prior.prior.width)
+    if TOP_PRIOR.prior.y_cond:
+        x[:,0] = y_cond.view(N, TOP_PRIOR.prior.width)
     else:
-        x[:,0] = top_prior.prior.start_token
+        x[:,0] = TOP_PRIOR.prior.start_token
 
     # for some reason, p=0.0, so the dropout stuff does absolutely nothing
-    x = top_prior.prior.x_emb_dropout(x) + top_prior.prior.pos_emb_dropout(top_prior.prior.pos_emb())[:input_seq_length] + x_cond # Pos emb and dropout
+    x = TOP_PRIOR.prior.x_emb_dropout(x) + TOP_PRIOR.prior.pos_emb_dropout(TOP_PRIOR.prior.pos_emb())[:input_seq_length] + x_cond # Pos emb and dropout
 
-    layers = top_prior.prior.transformer._attn_mods
+    layers = TOP_PRIOR.prior.transformer._attn_mods
 
     reps = {}
 
@@ -230,9 +210,7 @@ def get_activations_custom(top_prior,
 # important, gradient info takes up too much space,
 # causes CUDA OOM
 @torch.no_grad()
-def extract(vqvae,
-            top_prior,
-            audio=None,
+def extract(audio=None,
             fpath=None,
             meanpool=False,
             # pick which layer(s) to extract from
@@ -254,6 +232,11 @@ def extract(vqvae,
             # layers.
             force_empty_cache=True):
 
+    global VQVAE, TOP_PRIOR
+    # set up the models if they have not been yet
+    if VQVAE is None and TOP_PRIOR is None:
+        VQVAE, TOP_PRIOR = setup_models()
+
     # main function that runs extraction end-to-end.
 
     if layers is None:
@@ -268,19 +251,18 @@ def extract(vqvae,
     if force_empty_cache: empty_cache()
 
     # run vq-vae on the audio to get discretized audio
-    z = get_z(vqvae, audio)
+    z = get_z(VQVAE, audio)
 
     if force_empty_cache: empty_cache()
 
     # get conditioning info
-    x_cond, y_cond = get_cond(top_prior)
+    x_cond, y_cond = get_cond(TOP_PRIOR)
     # x_cond, y_cond = get_cond(hps, top_prior)
 
     if force_empty_cache: empty_cache()
 
     # get the activations from the LM
-    acts = get_activations_custom(top_prior,
-                                  z,
+    acts = get_activations_custom(z,
                                   x_cond,
                                   y_cond,
                                   layers_to_extract=layers,
