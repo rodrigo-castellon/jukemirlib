@@ -1,4 +1,4 @@
-"""Library stuff here."""
+"""Extraction methods here."""
 
 import librosa as lr
 import torch
@@ -25,20 +25,19 @@ DEFAULT_DURATION = 1048576 / JUKEBOX_SAMPLE_RATE
 
 VQVAE_RATE = T / DEFAULT_DURATION
 
+
 def empty_cache():
     torch.cuda.empty_cache()
     gc.collect()
 
+
 def load_audio(fpath, offset=0.0, duration=None):
     if duration is not None:
-        audio, _ = lr.load(fpath,
-                           sr=JUKEBOX_SAMPLE_RATE,
-                           offset=offset,
-                           duration=duration)
+        audio, _ = lr.load(
+            fpath, sr=JUKEBOX_SAMPLE_RATE, offset=offset, duration=duration
+        )
     else:
-        audio, _ = lr.load(fpath,
-                           sr=JUKEBOX_SAMPLE_RATE,
-                           offset=offset)
+        audio, _ = lr.load(fpath, sr=JUKEBOX_SAMPLE_RATE, offset=offset)
 
     if audio.ndim == 1:
         audio = audio[np.newaxis]
@@ -50,6 +49,7 @@ def load_audio(fpath, offset=0.0, duration=None):
         audio /= norm_factor
 
     return audio.flatten()
+
 
 def get_z(vqvae, audio):
     # don't compute unnecessary discrete encodings
@@ -66,12 +66,9 @@ def get_z(vqvae, audio):
 
 def get_cond(top_prior):
     # model only accepts sample length conditioning of
-    # >60 seconds
+    # >60 seconds, so we use 62
     sample_length_in_seconds = 62
 
-    #hps.sample_length = (
-    #    int(sample_length_in_seconds * hps.sr) // top_prior.raw_to_tokens
-    #) * top_prior.raw_to_tokens
     HPS_SAMPLE_LENGTH = (
         int(sample_length_in_seconds * HPS_SR) // top_prior.raw_to_tokens
     ) * top_prior.raw_to_tokens
@@ -85,11 +82,11 @@ def get_cond(top_prior):
         dict(
             artist="unknown",
             genre="unknown",
-            total_length=HPS_SAMPLE_LENGTH,#hps.sample_length,
+            total_length=HPS_SAMPLE_LENGTH,
             offset=0,
-            lyrics="""lyrics go here!!!""",
+            lyrics="""placeholder lyrics""",
         ),
-    ] * HPS_N_SAMPLES#hps.n_samples
+    ] * HPS_N_SAMPLES
 
     labels = [None, None, top_prior.labeller.get_batch_labels(metas, "cuda")]
 
@@ -100,35 +97,35 @@ def get_cond(top_prior):
 
     return x_cond, y_cond
 
-def downsample(representation,
-               target_rate=30,
-               method=None):
-    if method is None:
-        method = 'librosa_fft'
 
-    if method == 'librosa_kaiser':
-        resampled_reps = lr.resample(np.asfortranarray(representation.T),
-                                     T / DEFAULT_DURATION,
-                                     target_rate).T
-    elif method in ['librosa_fft', 'librosa_scipy']:
-        resampled_reps = lr.resample(np.asfortranarray(representation.T),
-                                     T / DEFAULT_DURATION,
-                                     target_rate,
-                                     res_type='fft').T
-    elif method == 'mean':
+def downsample(representation, target_rate=30, method=None):
+    if method is None:
+        method = "librosa_fft"
+
+    if method == "librosa_kaiser":
+        resampled_reps = lr.resample(
+            np.asfortranarray(representation.T), T / DEFAULT_DURATION, target_rate
+        ).T
+    elif method in ["librosa_fft", "librosa_scipy"]:
+        resampled_reps = lr.resample(
+            np.asfortranarray(representation.T),
+            T / DEFAULT_DURATION,
+            target_rate,
+            res_type="fft",
+        ).T
+    elif method == "mean":
         raise NotImplementedError
 
     return resampled_reps
 
+
 def roll(x, n):
     return t.cat((x[:, -n:], x[:, :-n]), dim=1)
 
-def get_activations_custom(x,
-                           x_cond,
-                           y_cond,
-                           layers_to_extract=None,
-                           fp16=False,
-                           fp16_out=False):
+
+def get_activations_custom(
+    x, x_cond, y_cond, layers_to_extract=None, fp16=False, fp16_out=False
+):
 
     # this function is adapted from:
     # https://github.com/openai/jukebox/blob/08efbbc1d4ed1a3cef96e08a931944c8b4d63bb3/jukebox/prior/autoregressive.py#L116
@@ -137,7 +134,7 @@ def get_activations_custom(x,
     if layers_to_extract is None:
         layers_to_extract = [36]
 
-    x = x[:,:T]  # limit to max context window of Jukebox
+    x = x[:, :T]  # limit to max context window of Jukebox
 
     input_seq_length = x.shape[1]
 
@@ -160,24 +157,32 @@ def get_activations_custom(x,
 
     if TOP_PRIOR.prior.x_cond:
         assert x_cond is not None
-        assert x_cond.shape == (N, D, TOP_PRIOR.prior.width) or x_cond.shape == (N, 1, TOP_PRIOR.prior.width), f"{x_cond.shape} != {(N, D, TOP_PRIOR.prior.width)} nor {(N, 1, TOP_PRIOR.prior.width)}. Did you pass the correct --sample_length?"
+        assert x_cond.shape == (N, D, TOP_PRIOR.prior.width) or x_cond.shape == (
+            N,
+            1,
+            TOP_PRIOR.prior.width,
+        ), f"{x_cond.shape} != {(N, D, TOP_PRIOR.prior.width)} nor {(N, 1, TOP_PRIOR.prior.width)}. Did you pass the correct --sample_length?"
     else:
         assert x_cond is None
         x_cond = t.zeros((N, 1, TOP_PRIOR.prior.width), device=x.device, dtype=t.float)
 
-    x_t = x # Target
+    x_t = x  # Target
     # self.x_emb is just a straightforward embedding, no trickery here
-    x = TOP_PRIOR.prior.x_emb(x) # X emb
+    x = TOP_PRIOR.prior.x_emb(x)  # X emb
     # this is to be able to fit in a start token/conditioning info: just shift to the right by 1
-    x = roll(x, 1) # Shift by 1, and fill in start token
+    x = roll(x, 1)  # Shift by 1, and fill in start token
     # self.y_cond == True always, so we just use y_cond here
     if TOP_PRIOR.prior.y_cond:
-        x[:,0] = y_cond.view(N, TOP_PRIOR.prior.width)
+        x[:, 0] = y_cond.view(N, TOP_PRIOR.prior.width)
     else:
-        x[:,0] = TOP_PRIOR.prior.start_token
+        x[:, 0] = TOP_PRIOR.prior.start_token
 
     # for some reason, p=0.0, so the dropout stuff does absolutely nothing
-    x = TOP_PRIOR.prior.x_emb_dropout(x) + TOP_PRIOR.prior.pos_emb_dropout(TOP_PRIOR.prior.pos_emb())[:input_seq_length] + x_cond # Pos emb and dropout
+    x = (
+        TOP_PRIOR.prior.x_emb_dropout(x)
+        + TOP_PRIOR.prior.pos_emb_dropout(TOP_PRIOR.prior.pos_emb())[:input_seq_length]
+        + x_cond
+    )  # Pos emb and dropout
 
     layers = TOP_PRIOR.prior.transformer._attn_mods
 
@@ -210,27 +215,29 @@ def get_activations_custom(x,
 # important, gradient info takes up too much space,
 # causes CUDA OOM
 @torch.no_grad()
-def extract(audio=None,
-            fpath=None,
-            meanpool=False,
-            # pick which layer(s) to extract from
-            layers=None,
-            # pick which part of the clip to load in
-            offset=0.0,
-            duration=None,
-            # downsampling frame-wise reps
-            downsample_target_rate=None,
-            downsample_method=None,
-            # for speed-saving
-            fp16=False,
-            # for space-saving
-            fp16_out=False,
-            # for GPU VRAM. potentially slows it
-            # down but we clean up garbage VRAM.
-            # disable if your GPU has a lot of memory
-            # or if you're extracting from earlier
-            # layers.
-            force_empty_cache=True):
+def extract(
+    audio=None,
+    fpath=None,
+    meanpool=False,
+    # pick which layer(s) to extract from
+    layers=None,
+    # pick which part of the clip to load in
+    offset=0.0,
+    duration=None,
+    # downsampling frame-wise reps
+    downsample_target_rate=None,
+    downsample_method=None,
+    # for speed-saving
+    fp16=False,
+    # for space-saving
+    fp16_out=False,
+    # for GPU VRAM. potentially slows it
+    # down but we clean up garbage VRAM.
+    # disable if your GPU has a lot of memory
+    # or if you're extracting from earlier
+    # layers.
+    force_empty_cache=True,
+):
 
     global VQVAE, TOP_PRIOR
     # set up the models if they have not been yet
@@ -248,35 +255,35 @@ def extract(audio=None,
     elif fpath is None:
         assert audio is not None
 
-    if force_empty_cache: empty_cache()
+    if force_empty_cache:
+        empty_cache()
 
     # run vq-vae on the audio to get discretized audio
     z = get_z(VQVAE, audio)
 
-    if force_empty_cache: empty_cache()
+    if force_empty_cache:
+        empty_cache()
 
     # get conditioning info
     x_cond, y_cond = get_cond(TOP_PRIOR)
-    # x_cond, y_cond = get_cond(hps, top_prior)
 
-    if force_empty_cache: empty_cache()
+    if force_empty_cache:
+        empty_cache()
 
     # get the activations from the LM
-    acts = get_activations_custom(z,
-                                  x_cond,
-                                  y_cond,
-                                  layers_to_extract=layers,
-                                  fp16=fp16,
-                                  fp16_out=fp16_out)
+    acts = get_activations_custom(
+        z, x_cond, y_cond, layers_to_extract=layers, fp16=fp16, fp16_out=fp16_out
+    )
 
-    if force_empty_cache: empty_cache()
+    if force_empty_cache:
+        empty_cache()
 
     # postprocessing
     if downsample_target_rate is not None:
         for num in acts.keys():
-            acts[num] = downsample(acts[num],
-                                   target_rate=downsample_target_rate,
-                                   method=downsample_method)
+            acts[num] = downsample(
+                acts[num], target_rate=downsample_target_rate, method=downsample_method
+            )
 
     if meanpool:
         acts = {num: act.mean(axis=0) for num, act in acts.items()}
