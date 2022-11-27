@@ -21,5 +21,5 @@ If you wish to use this library with your GPU, it must have at least 13GB of VRA
 ### Installing
 You can install via `pip`
 ```sh
-pip install jukemirlib
+pip install git+https://github.com/rodrigo-castellon/jukemirlib.git
 ```
