@@ -1,6 +1,8 @@
 import os
 from pathlib import Path
 from tqdm import tqdm
+import wget
+import sys
 
 # imports and set up Jukebox's multi-GPU parallelization
 import jukebox
@@ -61,6 +63,19 @@ def set_module_tensor_to_device(
             new_value = param_cls(new_value, requires_grad=old_value.requires_grad, **kwargs).to(device)
             module._parameters[tensor_name] = new_value
 
+def get_checkpoint(local_path):
+    if not os.path.exists(local_path):
+        remote_path = 'https://openaipublic.azureedge.net/jukebox/models/5b/' + local_path.split('/')[-1]
+
+        # create this bar_progress method which is invoked automatically from wget
+        def bar_progress(current, total, width=80):
+            progress_message = "Downloading: %d%% [%d / %d] bytes" % (current / total * 100, current, total)
+            # Don't use print() as it will print in new line every time.
+            sys.stdout.write("\r" + progress_message)
+            sys.stdout.flush()
+
+        wget.download(remote_path, local_path, bar=bar_progress)
+
 def setup_models(cache_dir="/juice/scr/rjcaste/jukemirlib-testing/model_cache",
                  verbose=True,
                  device="cuda"):
@@ -68,6 +83,10 @@ def setup_models(cache_dir="/juice/scr/rjcaste/jukemirlib-testing/model_cache",
     VQVAE_CACHE_PATH = cache_dir + '/vqvae.pth.tar'
     PRIOR_CACHE_PATH = cache_dir + '/prior_level_2.pth.tar'
     os.makedirs(cache_dir, exist_ok=True)
+
+    # get the checkpoints downloaded if they haven't been already
+    get_checkpoint(VQVAE_CACHE_PATH)
+    get_checkpoint(PRIOR_CACHE_PATH)
 
     if verbose:
         print("Importing jukebox and associated packages...")
