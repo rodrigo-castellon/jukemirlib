@@ -14,7 +14,6 @@ from accelerate import init_empty_weights
 import torch.nn as nn
 import torch
 
-from .constants import CACHE_DIR, DEVICE
 
 __all__ = ["setup_models"]
 
@@ -103,17 +102,22 @@ def get_checkpoint(local_path):
 
 
 def load_weights(model, weights_path):
+    from . import DEVICE
+
     model_weights = torch.load(weights_path, map_location="cpu")
 
     # load_state_dict, basically
     for k in tqdm(model_weights["model"].keys()):
         set_module_tensor_to_device(model, k, DEVICE, value=model_weights["model"][k])
 
+    model.to(DEVICE)
+
     del model_weights
 
 
 def setup_models(verbose=True):
     global VQVAE, TOP_PRIOR
+    from .constants import CACHE_DIR
 
     # caching preliminaries
     VQVAE_CACHE_PATH = CACHE_DIR + "/vqvae.pth.tar"

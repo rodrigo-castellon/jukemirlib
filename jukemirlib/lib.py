@@ -6,7 +6,7 @@ import torch as t
 import gc
 import numpy as np
 
-from .constants import DEVICE
+# from .constants import DEVICE
 from . import VQVAE, TOP_PRIOR
 from .setup_models import *
 
@@ -52,6 +52,8 @@ def load_audio(fpath, offset=0.0, duration=None):
 
 
 def get_z(vqvae, audio):
+    from . import DEVICE
+
     # don't compute unnecessary discrete encodings
     audio = audio[: JUKEBOX_SAMPLE_RATE * 25]
 
@@ -65,6 +67,8 @@ def get_z(vqvae, audio):
 
 
 def get_cond(top_prior):
+    from . import DEVICE
+
     # model only accepts sample length conditioning of
     # >60 seconds, so we use 62
     sample_length_in_seconds = 62
@@ -88,7 +92,7 @@ def get_cond(top_prior):
         ),
     ] * HPS_N_SAMPLES
 
-    labels = [None, None, top_prior.labeller.get_batch_labels(metas, "cuda")]
+    labels = [None, None, top_prior.labeller.get_batch_labels(metas, DEVICE)]
 
     x_cond, y_cond, prime = top_prior.get_cond(None, top_prior.get_y(labels[-1], 0))
 
@@ -146,7 +150,8 @@ def get_activations_custom(
         x = TOP_PRIOR.prior.preprocess(x)
 
     N, D = x.shape
-    assert isinstance(x, t.cuda.LongTensor)
+    # assert isinstance(x, t.cuda.LongTensor)
+    assert isinstance(x, t.cuda.LongTensor) or isinstance(x, t.LongTensor)
     assert (0 <= x).all() and (x < TOP_PRIOR.prior.bins).all()
 
     if TOP_PRIOR.prior.y_cond:

@@ -16,6 +16,8 @@ Changing defaults:
 - The default model weight cache directory is `~/.cache/jukemirlib`, but if you want to change that, just set `jukemirlib.CACHE_DIR` to your desired directory before continuing with extraction.
 - The default device is "cuda" if you have a GPU and "cpu" otherwise, but if you want to set it manually you can set `jukemirlib.DEVICE`.
 
+If you wish to use this library, you must have a GPU with at least 13GB of memory.
+
 ### Installing
 You can install via `pip`
 ```sh
