@@ -11,6 +11,11 @@ __all__ = ["load_audio", "extract"]
 JUKEBOX_SAMPLE_RATE = 44100
 T = 8192
 
+# these replace hps.sr and hps.n_samples, initialized
+# in setup_models.py
+HPS_SR = JUKEBOX_SAMPLE_RATE
+HPS_N_SAMPLES = 8
+
 # 1048576 found in paper, last page
 DEFAULT_DURATION = 1048576 / JUKEBOX_SAMPLE_RATE
 
@@ -42,7 +47,7 @@ def load_audio(fpath, offset=0.0, duration=None):
 
     return audio.flatten()
 
-def get_z(audio):
+def get_z(vqvae, audio):
     # don't compute unnecessary discrete encodings
     audio = audio[: JUKEBOX_SAMPLE_RATE * 25]
 
@@ -53,13 +58,16 @@ def get_z(audio):
     return z
 
 
-def get_cond(hps, top_prior):
+def get_cond(top_prior):
     # model only accepts sample length conditioning of
     # >60 seconds
     sample_length_in_seconds = 62
 
-    hps.sample_length = (
-        int(sample_length_in_seconds * hps.sr) // top_prior.raw_to_tokens
+    #hps.sample_length = (
+    #    int(sample_length_in_seconds * hps.sr) // top_prior.raw_to_tokens
+    #) * top_prior.raw_to_tokens
+    HPS_SAMPLE_LENGTH = (
+        int(sample_length_in_seconds * HPS_SR) // top_prior.raw_to_tokens
     ) * top_prior.raw_to_tokens
 
     # NOTE: the 'lyrics' parameter is required, which is why it is included,
@@ -71,11 +79,11 @@ def get_cond(hps, top_prior):
         dict(
             artist="unknown",
             genre="unknown",
-            total_length=hps.sample_length,
+            total_length=HPS_SAMPLE_LENGTH,#hps.sample_length,
             offset=0,
             lyrics="""lyrics go here!!!""",
         ),
-    ] * hps.n_samples
+    ] * HPS_N_SAMPLES#hps.n_samples
 
     labels = [None, None, top_prior.labeller.get_batch_labels(metas, "cuda")]
 
@@ -134,7 +142,8 @@ def get_final_activations(z, x_cond, y_cond, top_prior):
 def roll(x, n):
     return t.cat((x[:, -n:], x[:, :-n]), dim=1)
 
-def get_activations_custom(x,
+def get_activations_custom(top_prior,
+                           x,
                            x_cond,
                            y_cond,
                            layers_to_extract=None,
@@ -221,7 +230,9 @@ def get_activations_custom(x,
 # important, gradient info takes up too much space,
 # causes CUDA OOM
 @torch.no_grad()
-def extract(audio=None,
+def extract(vqvae,
+            top_prior,
+            audio=None,
             fpath=None,
             meanpool=False,
             # pick which layer(s) to extract from
@@ -257,17 +268,19 @@ def extract(audio=None,
     if force_empty_cache: empty_cache()
 
     # run vq-vae on the audio to get discretized audio
-    z = get_z(audio)
+    z = get_z(vqvae, audio)
 
     if force_empty_cache: empty_cache()
 
     # get conditioning info
-    x_cond, y_cond = get_cond(hps, top_prior)
+    x_cond, y_cond = get_cond(top_prior)
+    # x_cond, y_cond = get_cond(hps, top_prior)
 
     if force_empty_cache: empty_cache()
 
     # get the activations from the LM
-    acts = get_activations_custom(z,
+    acts = get_activations_custom(top_prior,
+                                  z,
                                   x_cond,
                                   y_cond,
                                   layers_to_extract=layers,
