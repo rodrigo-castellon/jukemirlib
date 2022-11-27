@@ -135,7 +135,7 @@ def setup_models(verbose=True):
     if verbose:
         print("Setting up the VQ-VAE...")
 
-    model = "5b"  # or "1b_lyrics"
+    model = "5b"
     hps = Hyperparams()
     hps.sr = 44100
     hps.n_samples = 3 if model == "5b_lyrics" else 8

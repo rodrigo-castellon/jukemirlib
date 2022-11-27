@@ -8,6 +8,7 @@ import numpy as np
 
 # from .constants import DEVICE
 from . import VQVAE, TOP_PRIOR
+from .constants import JUKEBOX_SAMPLE_RATE, T, CTX_WINDOW_LENGTH
 from .setup_models import *
 
 __all__ = ["load_audio", "extract"]
@@ -15,13 +16,7 @@ __all__ = ["load_audio", "extract"]
 JUKEBOX_SAMPLE_RATE = 44100
 T = 8192
 
-# these replace hps.sr and hps.n_samples, initialized
-# in setup_models.py
-HPS_SR = JUKEBOX_SAMPLE_RATE
-HPS_N_SAMPLES = 8
-
-# 1048576 found in paper, last page
-DEFAULT_DURATION = 1048576 / JUKEBOX_SAMPLE_RATE
+DEFAULT_DURATION = CTX_WINDOW_LENGTH / JUKEBOX_SAMPLE_RATE
 
 VQVAE_RATE = T / DEFAULT_DURATION
 
@@ -74,7 +69,7 @@ def get_cond(top_prior):
     sample_length_in_seconds = 62
 
     HPS_SAMPLE_LENGTH = (
-        int(sample_length_in_seconds * HPS_SR) // top_prior.raw_to_tokens
+        int(sample_length_in_seconds * JUKEBOX_SAMPLE_RATE) // top_prior.raw_to_tokens
     ) * top_prior.raw_to_tokens
 
     # NOTE: the 'lyrics' parameter is required, which is why it is included,
@@ -90,7 +85,7 @@ def get_cond(top_prior):
             offset=0,
             lyrics="""placeholder lyrics""",
         ),
-    ] * HPS_N_SAMPLES
+    ] * 8
 
     labels = [None, None, top_prior.labeller.get_batch_labels(metas, DEVICE)]
 
