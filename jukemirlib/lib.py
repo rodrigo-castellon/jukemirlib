@@ -108,8 +108,8 @@ def downsample(representation, target_rate=30, method=None):
     elif method in ["librosa_fft", "librosa_scipy"]:
         resampled_reps = lr.resample(
             np.asfortranarray(representation.T),
-            T / DEFAULT_DURATION,
-            target_rate,
+            orig_sr=T / DEFAULT_DURATION,
+            target_sr=target_rate,
             res_type="fft",
         ).T
     elif method == "mean":
