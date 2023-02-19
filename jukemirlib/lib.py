@@ -303,9 +303,23 @@ def extract(
     # postprocessing
     if downsample_target_rate is not None:
         for num in acts.keys():
-            acts[num] = downsample(
-                acts[num], target_rate=downsample_target_rate, method=downsample_method
-            )
+            if bsize == 1:
+                acts[num] = downsample(
+                    acts[num],
+                    target_rate=downsample_target_rate,
+                    method=downsample_method,
+                )
+            else:
+                acts[num] = np.array(
+                    [
+                        downsample(
+                            act,
+                            target_rate=downsample_target_rate,
+                            method=downsample_method,
+                        )
+                        for act in acts[num]
+                    ]
+                )
 
     if meanpool:
         acts = {num: act.mean(axis=0) for num, act in acts.items()}
