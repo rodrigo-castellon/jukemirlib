@@ -50,13 +50,17 @@ def get_z(vqvae, audio):
     from . import DEVICE
 
     # don't compute unnecessary discrete encodings
-    audio = audio[: JUKEBOX_SAMPLE_RATE * 25]
+    if type(audio) == type([]):
+        audio = np.array(audio)[:, : JUKEBOX_SAMPLE_RATE * 25]
+    else:
+        audio = audio[np.newaxis, : JUKEBOX_SAMPLE_RATE * 25]
 
-    audio = torch.from_numpy(audio[np.newaxis, :, np.newaxis]).to(device=DEVICE)
+    audio = torch.from_numpy(audio[..., np.newaxis]).to(device=DEVICE)
 
     zs = vqvae.encode(audio)
 
-    z = zs[-1].flatten()[np.newaxis, :]
+    # get the last level of VQ-VAE tokens
+    z = zs[-1]
 
     return z
 
@@ -125,7 +129,6 @@ def roll(x, n):
 def get_activations_custom(
     x, x_cond, y_cond, layers_to_extract=None, fp16=False, fp16_out=False
 ):
-
     # this function is adapted from:
     # https://github.com/openai/jukebox/blob/08efbbc1d4ed1a3cef96e08a931944c8b4d63bb3/jukebox/prior/autoregressive.py#L116
 
@@ -216,6 +219,9 @@ def get_activations_custom(
 # causes CUDA OOM
 @torch.no_grad()
 def extract(
+    # audio and fpath can be either a single item
+    # or a list of items. will attempt batch inference
+    # when provided a list.
     audio=None,
     fpath=None,
     meanpool=False,
@@ -238,7 +244,6 @@ def extract(
     # layers.
     force_empty_cache=True,
 ):
-
     global VQVAE, TOP_PRIOR
     # set up the models if they have not been yet
     if VQVAE is None and TOP_PRIOR is None:
@@ -251,9 +256,23 @@ def extract(
 
     if audio is None:
         assert fpath is not None
-        audio = load_audio(fpath, offset=offset, duration=duration)
+
+        if type(fpath) == type([]):
+            audio = [
+                load_audio(path, offset=offset, duration=duration) for path in fpath
+            ]
+            bsize = len(fpath)
+        else:
+            audio = load_audio(fpath, offset=offset, duration=duration)
+            bsize = 1
+
     elif fpath is None:
         assert audio is not None
+
+        if type(audio) == type([]):
+            bsize = len(audio)
+        else:
+            bsize = 1
 
     if force_empty_cache:
         empty_cache()
@@ -266,6 +285,9 @@ def extract(
 
     # get conditioning info
     x_cond, y_cond = get_cond(TOP_PRIOR)
+
+    # avoid raising asserts
+    x_cond, y_cond = x_cond.repeat(bsize, 1, 1), y_cond.repeat(bsize, 1, 1)
 
     if force_empty_cache:
         empty_cache()
