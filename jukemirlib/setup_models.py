@@ -83,6 +83,8 @@ def set_module_tensor_to_device(
 def get_checkpoint(local_path):
     from .constants import REMOTE_PREFIX
 
+    print("USING REMOTE:", REMOTE_PREFIX)
+
     if not os.path.exists(local_path):
         remote_path = REMOTE_PREFIX + local_path.split("/")[-1]
 
