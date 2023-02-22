@@ -182,11 +182,11 @@ def setup_models(cache_dir=None, remote_prefix=None, device=None, verbose=True):
     if verbose:
         print("Loading the top prior weights into memory...")
 
-    load_weights(TOP_PRIOR, PRIOR_CACHE_PATH, device)
+    load_weights(TOP_PRIOR, prior_cache_path, device)
 
     gc.collect()
     torch.cuda.empty_cache()
 
-    load_weights(VQVAE, VQVAE_CACHE_PATH, device)
+    load_weights(VQVAE, vqvae_cache_path, device)
 
     return VQVAE, TOP_PRIOR
