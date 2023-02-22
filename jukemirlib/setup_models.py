@@ -81,11 +81,10 @@ def set_module_tensor_to_device(
 
 
 def get_checkpoint(local_path):
+    from .constants import REMOTE_PREFIX
+
     if not os.path.exists(local_path):
-        remote_path = (
-            "https://openaipublic.azureedge.net/jukebox/models/5b/"
-            + local_path.split("/")[-1]
-        )
+        remote_path = REMOTE_PREFIX + local_path.split("/")[-1]
 
         # create this bar_progress method which is invoked automatically from wget
         def bar_progress(current, total, width=80):
