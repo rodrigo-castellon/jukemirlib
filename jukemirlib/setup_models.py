@@ -80,12 +80,10 @@ def set_module_tensor_to_device(
             module._parameters[tensor_name] = new_value
 
 
-def get_checkpoint(local_path):
+def get_checkpoint(local_path, remote_prefix):
+
     if not os.path.exists(local_path):
-        remote_path = (
-            "https://openaipublic.azureedge.net/jukebox/models/5b/"
-            + local_path.split("/")[-1]
-        )
+        remote_path = remote_prefix + local_path.split("/")[-1]
 
         # create this bar_progress method which is invoked automatically from wget
         def bar_progress(current, total, width=80):
@@ -101,32 +99,45 @@ def get_checkpoint(local_path):
         wget.download(remote_path, local_path, bar=bar_progress)
 
 
-def load_weights(model, weights_path):
-    from . import DEVICE
+def load_weights(model, weights_path, device):
 
     model_weights = torch.load(weights_path, map_location="cpu")
 
     # load_state_dict, basically
     for k in tqdm(model_weights["model"].keys()):
-        set_module_tensor_to_device(model, k, DEVICE, value=model_weights["model"][k])
+        set_module_tensor_to_device(model, k, device, value=model_weights["model"][k])
 
-    model.to(DEVICE)
+    model.to(device)
 
     del model_weights
 
 
-def setup_models(verbose=True):
+def setup_models(cache_dir=None, remote_prefix=None, device=None, verbose=True):
     global VQVAE, TOP_PRIOR
-    from .constants import CACHE_DIR
+
+    if cache_dir is None:
+        from .constants import CACHE_DIR
+
+        cache_dir = CACHE_DIR
+
+    if remote_prefix is None:
+        from .constants import REMOTE_PREFIX
+
+        remote_prefix = REMOTE_PREFIX
+
+    if device is None:
+        from .constants import DEVICE
+
+        device = DEVICE
 
     # caching preliminaries
-    VQVAE_CACHE_PATH = CACHE_DIR + "/vqvae.pth.tar"
-    PRIOR_CACHE_PATH = CACHE_DIR + "/prior_level_2.pth.tar"
-    os.makedirs(CACHE_DIR, exist_ok=True)
+    vqvae_cache_path = cache_dir + "/vqvae.pth.tar"
+    prior_cache_path = cache_dir + "/prior_level_2.pth.tar"
+    os.makedirs(cache_dir, exist_ok=True)
 
     # get the checkpoints downloaded if they haven't been already
-    get_checkpoint(VQVAE_CACHE_PATH)
-    get_checkpoint(PRIOR_CACHE_PATH)
+    get_checkpoint(vqvae_cache_path, remote_prefix)
+    get_checkpoint(prior_cache_path, remote_prefix)
 
     if verbose:
         print("Importing jukebox and associated packages...")
@@ -171,11 +182,11 @@ def setup_models(verbose=True):
     if verbose:
         print("Loading the top prior weights into memory...")
 
-    load_weights(TOP_PRIOR, PRIOR_CACHE_PATH)
+    load_weights(TOP_PRIOR, PRIOR_CACHE_PATH, device)
 
     gc.collect()
     torch.cuda.empty_cache()
 
-    load_weights(VQVAE, VQVAE_CACHE_PATH)
+    load_weights(VQVAE, VQVAE_CACHE_PATH, device)
 
     return VQVAE, TOP_PRIOR
