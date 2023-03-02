@@ -103,6 +103,8 @@ def load_weights(model, weights_path, device):
 
     print(f"in load_weights(model={model}, weights_path={weights_path}, device={device})")
 
+    print(f"all files under the parent directory of weights_path: {list(Path(weights_path).parent.glob('*'))}")
+
     model_weights = torch.load(weights_path, map_location="cpu")
 
     print("now loading them into the correct device...")
