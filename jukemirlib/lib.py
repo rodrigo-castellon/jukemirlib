@@ -7,7 +7,7 @@ import gc
 import numpy as np
 
 # from .constants import DEVICE
-from . import VQVAE, TOP_PRIOR
+from . import VQVAE, TOP_PRIOR, x_cond, y_cond
 from .constants import JUKEBOX_SAMPLE_RATE, T, CTX_WINDOW_LENGTH
 from .setup_models import *
 
