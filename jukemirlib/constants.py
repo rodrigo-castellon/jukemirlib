@@ -1,9 +1,11 @@
 import torch as t
 import os
 
-global VQVAE, TOP_PRIOR, DEVICE
+global VQVAE, TOP_PRIOR, DEVICE, x_cond, y_cond
 VQVAE = None
 TOP_PRIOR = None
+x_cond = None
+y_cond = None
 CACHE_DIR = os.path.expanduser("~") + "/.cache/jukemirlib"
 DEVICE = "cuda" if t.cuda.is_available() else "cpu"
 T = 8192
