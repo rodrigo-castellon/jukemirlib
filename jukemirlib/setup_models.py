@@ -100,19 +100,10 @@ def get_checkpoint(local_path, remote_prefix):
 
 
 def load_weights(model, weights_path, device):
-
-    #print(f"in load_weights(model={model}, weights_path={weights_path}, device={device})")
-
-    #print(f"all files under the parent directory of weights_path: {list(Path(weights_path).parent.glob('*'))}")
-
     model_weights = torch.load(weights_path, map_location="cpu")
-
-    #print("now loading them into the correct device...")
-    #print(f"there are {len(model_weights['model'].keys())} module tensors to load in")
 
     # load_state_dict, basically
     for k in tqdm(model_weights["model"].keys()):
-        #print('loading...')
         set_module_tensor_to_device(model, k, device, value=model_weights["model"][k])
 
     model.to(device)

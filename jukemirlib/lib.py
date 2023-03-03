@@ -284,16 +284,11 @@ def extract(
         empty_cache()
 
     if x_cond is None or y_cond is None:
-        print('#\n' * 10)
-        print('COMPUTING X_COND AND Y_COND')
         # get conditioning info
         x_cond, y_cond = get_cond(TOP_PRIOR)
 
         # avoid raising asserts
         x_cond, y_cond = x_cond.repeat(bsize, 1, 1), y_cond.repeat(bsize, 1, 1)
-    else:
-        print('#\n' * 10)
-        print('NOT COMPUTING X_COND AND Y_COND')
 
     if force_empty_cache:
         empty_cache()
