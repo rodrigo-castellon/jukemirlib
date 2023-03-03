@@ -93,7 +93,7 @@ def get_cond(top_prior):
 
     labels = [None, None, top_prior.labeller.get_batch_labels(metas, DEVICE)]
 
-    print("labels[2].shape", labels[2].shape)
+    print("labels[2]", labels[2])
     x_cond, y_cond, prime = top_prior.get_cond(None, top_prior.get_y(labels[-1], 0))
 
     try:
