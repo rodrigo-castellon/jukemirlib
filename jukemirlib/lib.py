@@ -65,7 +65,11 @@ def get_z(vqvae, audio):
     return z
 
 
-def get_cond(top_prior):
+def get_cond(top_prior, temp_device='cpu'):
+    # temp_device because x_cond takes ~1GB VRAM
+    # before cutting from 8 to batch size of 1,
+    # which causes CUDA OOM under certain conditions
+
     from . import DEVICE
 
     # model only accepts sample length conditioning of
@@ -91,7 +95,7 @@ def get_cond(top_prior):
         ),
     ] * 8
 
-    labels = [None, None, top_prior.labeller.get_batch_labels(metas, DEVICE)]
+    labels = [None, None, top_prior.labeller.get_batch_labels(metas, temp_device)]
 
     print("labels[2]", labels[2])
     x_cond, y_cond, prime = top_prior.get_cond(None, top_prior.get_y(labels[-1], 0))
@@ -105,8 +109,8 @@ def get_cond(top_prior):
 
     print(f"T = {T}")
 
-    x_cond = x_cond[0, :T][np.newaxis, ...]
-    y_cond = y_cond[0][np.newaxis, ...]
+    x_cond = x_cond[0, :T][np.newaxis, ...].to(DEVICE)
+    y_cond = y_cond[0][np.newaxis, ...].to(DEVICE)
 
     return x_cond, y_cond
 
