@@ -65,11 +65,7 @@ def get_z(vqvae, audio):
     return z
 
 
-def get_cond(top_prior, temp_device='cpu'):
-    # temp_device because x_cond takes ~1GB VRAM
-    # before cutting from 8 to batch size of 1,
-    # which causes CUDA OOM under certain conditions
-
+def get_cond(top_prior):
     from . import DEVICE
 
     # model only accepts sample length conditioning of
@@ -95,19 +91,9 @@ def get_cond(top_prior, temp_device='cpu'):
         ),
     ] * 8
 
-    labels = [None, None, top_prior.labeller.get_batch_labels(metas, temp_device)]
+    labels = [None, None, top_prior.labeller.get_batch_labels(metas, DEVICE)]
 
-    print("labels[2]", labels[2])
     x_cond, y_cond, prime = top_prior.get_cond(None, top_prior.get_y(labels[-1], 0))
-
-    try:
-        print("X_COND.SHAPE", x_cond.shape)
-        print("Y_COND.SHAPE", y_cond.shape)
-        print("PRIME.SHAPE", prime.shape)
-    except:
-        pass
-
-    print(f"T = {T}")
 
     x_cond = x_cond[0, :T][np.newaxis, ...].to(DEVICE)
     y_cond = y_cond[0][np.newaxis, ...].to(DEVICE)
@@ -258,7 +244,7 @@ def extract(
     # layers.
     force_empty_cache=True,
 ):
-    global VQVAE, TOP_PRIOR
+    global VQVAE, TOP_PRIOR, x_cond, y_cond
     # set up the models if they have not been yet
     if VQVAE is None and TOP_PRIOR is None:
         VQVAE, TOP_PRIOR = setup_models()
@@ -297,11 +283,17 @@ def extract(
     if force_empty_cache:
         empty_cache()
 
-    # get conditioning info
-    x_cond, y_cond = get_cond(TOP_PRIOR)
+    if x_cond is None or y_cond is None:
+        print('#\n' * 10)
+        print('COMPUTING X_COND AND Y_COND')
+        # get conditioning info
+        x_cond, y_cond = get_cond(TOP_PRIOR)
 
-    # avoid raising asserts
-    x_cond, y_cond = x_cond.repeat(bsize, 1, 1), y_cond.repeat(bsize, 1, 1)
+        # avoid raising asserts
+        x_cond, y_cond = x_cond.repeat(bsize, 1, 1), y_cond.repeat(bsize, 1, 1)
+    else:
+        print('#\n' * 10)
+        print('NOT COMPUTING X_COND AND Y_COND')
 
     if force_empty_cache:
         empty_cache()
