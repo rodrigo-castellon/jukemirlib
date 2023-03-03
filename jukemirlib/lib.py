@@ -93,7 +93,17 @@ def get_cond(top_prior):
 
     labels = [None, None, top_prior.labeller.get_batch_labels(metas, DEVICE)]
 
+    print("labels[2].shape", labels[2].shape)
     x_cond, y_cond, prime = top_prior.get_cond(None, top_prior.get_y(labels[-1], 0))
+
+    try:
+        print("X_COND.SHAPE", x_cond.shape)
+        print("Y_COND.SHAPE", y_cond.shape)
+        print("PRIME.SHAPE", prime.shape)
+    except:
+        pass
+
+    print(f"T = {T}")
 
     x_cond = x_cond[0, :T][np.newaxis, ...]
     y_cond = y_cond[0][np.newaxis, ...]
